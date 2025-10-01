@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Comparison Slider</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #45a049;
+        }
+
+        .btn-secondary {
+            background: #2196F3;
+        }
+
+        .btn-secondary:hover {
+            background: #0b7dda;
+        }
+
+        .comparison-container {
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+            min-height: 80vh;
+            overflow: hidden;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            background: #000;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .image-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .image-wrapper img,
+        .image-wrapper canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .image-before {
+            z-index: 1;
+        }
+
+        .image-after {
+            z-index: 2;
+            clip-path: inset(0 0 0 50%);
+        }
+
+        .slider {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 4px;
+            height: 100%;
+            background: #fff;
+            cursor: ew-resize;
+            z-index: 3;
+            transform: translateX(-50%);
+        }
+
+        .slider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 40px;
+            height: 40px;
+            background: #fff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .slider::after {
+            content: '⟷';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 20px;
+            color: #333;
+            z-index: 1;
+        }
+
+        .placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 16px;
+        }
+
+        .info {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+            max-width: 600px;
+        }
+    </style>
+</head>
+<body>
+    <h1>CSV Comparison Slider</h1>
+
+    <div class="controls">
+        <div class="file-input-wrapper">
+            <label class="btn" for="image1">Upload CSV 1 / Image 1</label>
+            <input type="file" id="image1" accept=".csv,image/*">
+        </div>
+        <div class="file-input-wrapper">
+            <label class="btn btn-secondary" for="image2">Upload CSV 2 / Image 2</label>
+            <input type="file" id="image2" accept=".csv,image/*">
+        </div>
+        <button class="btn" id="downloadBtn" style="background: #FF9800; display: none;">Download Comparison</button>
+    </div>
+
+    <div class="comparison-container" id="container">
+        <div class="image-wrapper image-before" id="before"></div>
+        <div class="image-wrapper image-after" id="after"></div>
+        <div class="slider" id="slider"></div>
+    </div>
+
+    <div class="info">
+        Compare CSV files side-by-side with interactive heatmap visualization.
+        Upload two CSV files to see differences. Images also supported.
+        Drag the slider to compare. Download button appears when both files are loaded.
+    </div>
+
+    <script>
+        const container = document.getElementById('container');
+        const slider = document.getElementById('slider');
+        const beforeDiv = document.getElementById('before');
+        const afterDiv = document.getElementById('after');
+        const image1Input = document.getElementById('image1');
+        const image2Input = document.getElementById('image2');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        let isDragging = false;
+        let currentPosition = 50;
+        let image1Data = null;
+        let image2Data = null;
+        let image1Name = '';
+        let image2Name = '';
+
+        // Slider functionality
+        function updateSlider(position) {
+            currentPosition = Math.max(0, Math.min(100, position));
+            slider.style.left = currentPosition + '%';
+            afterDiv.style.clipPath = `inset(0 0 0 ${currentPosition}%)`;
+        }
+
+        slider.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            e.preventDefault();
+        });
+        document.addEventListener('mouseup', () => isDragging = false);
+
+        container.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            const rect = container.getBoundingClientRect();
+            const position = ((e.clientX - rect.left) / rect.width) * 100;
+            updateSlider(position);
+        });
+
+        container.addEventListener('click', (e) => {
+            const rect = container.getBoundingClientRect();
+            const position = ((e.clientX - rect.left) / rect.width) * 100;
+            updateSlider(position);
+        });
+
+        // Touch support
+        slider.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            e.preventDefault();
+        });
+
+        document.addEventListener('touchend', () => isDragging = false);
+
+        container.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const rect = container.getBoundingClientRect();
+            const touch = e.touches[0];
+            const position = ((touch.clientX - rect.left) / rect.width) * 100;
+            updateSlider(position);
+            e.preventDefault();
+        });
+
+        // File handling
+        function handleFile(file, target) {
+            if (target === beforeDiv) image1Name = file.name;
+            if (target === afterDiv) image2Name = file.name;
+
+            if (file.type.startsWith('image/')) {
+                loadImage(file, target);
+            } else if (file.name.endsWith('.csv')) {
+                loadCSV(file, target);
+            }
+        }
+
+        function loadImage(file, target) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const dataUrl = e.target.result;
+                target.innerHTML = `<img src="${dataUrl}" alt="Comparison image">`;
+                if (target === beforeDiv) image1Data = dataUrl;
+                if (target === afterDiv) image2Data = dataUrl;
+                updateDownloadButton();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function loadCSV(file, target) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const csv = e.target.result;
+                const data = parseCSV(csv);
+                renderCSVAsHeatmap(data, target);
+            };
+            reader.readAsText(file);
+        }
+
+        function parseCSV(csv) {
+            const lines = csv.trim().split('\n');
+            return lines.map(line => {
+                // Handle both comma and semicolon separators
+                const values = line.split(/[,;]/).map(v => {
+                    const trimmed = v.trim();
+                    const num = parseFloat(trimmed);
+                    // Keep text as-is, numbers as numbers (3 decimal precision)
+                    return isNaN(num) ? trimmed : num;
+                });
+                return values;
+            });
+        }
+
+        function renderCSVAsHeatmap(data, target) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            const rows = data.length;
+            const cols = Math.max(...data.map(row => row.length));
+
+            // Separate numbers and text
+            const allValues = data.flat();
+            const numericValues = allValues.filter(v => typeof v === 'number');
+            const min = numericValues.length > 0 ? Math.min(...numericValues) : 0;
+            const max = numericValues.length > 0 ? Math.max(...numericValues) : 1;
+            const range = max - min || 1;
+
+            // Calculate width per column based on max chars in that column
+            const columnWidths = [];
+            for (let j = 0; j < cols; j++) {
+                let maxCharsInColumn = 0;
+                data.forEach(row => {
+                    if (row[j] !== undefined) {
+                        const value = row[j];
+                        const charCount = typeof value === 'number'
+                            ? value.toFixed(3).length
+                            : String(value).length;
+                        maxCharsInColumn = Math.max(maxCharsInColumn, charCount);
+                    }
+                });
+                // Much wider: 200-1200px per column based on content
+                const width = Math.max(200, Math.min(1200, 100 + maxCharsInColumn * 30));
+                columnWidths.push(width);
+            }
+
+            // Keep reasonable height: aim for ~1200px tall canvas
+            const targetHeight = 1200;
+            const cellHeight = Math.max(80, Math.floor(targetHeight / rows));
+
+            // Calculate column x positions
+            const columnXPositions = [0];
+            for (let j = 0; j < cols - 1; j++) {
+                columnXPositions.push(columnXPositions[j] + columnWidths[j]);
+            }
+
+            // Set canvas size
+            canvas.width = columnWidths.reduce((sum, w) => sum + w, 0);
+            canvas.height = rows * cellHeight;
+
+            // Draw heatmap
+            data.forEach((row, i) => {
+                row.forEach((value, j) => {
+                    const isNumeric = typeof value === 'number';
+                    const x = columnXPositions[j];
+                    const width = columnWidths[j];
+
+                    if (isNumeric) {
+                        // Color based on value for numbers
+                        const normalized = (value - min) / range;
+                        const hue = (1 - normalized) * 240; // Blue (240) to Red (0)
+                        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+                    } else {
+                        // Gray background for text
+                        ctx.fillStyle = '#444';
+                    }
+
+                    ctx.fillRect(x, i * cellHeight, width, cellHeight);
+
+                    // Scale font based on actual cell height
+                    const fontSize = Math.max(28, Math.min(200, cellHeight * 0.6));
+
+                    if (isNumeric) {
+                        ctx.fillStyle = '#000';
+                    } else {
+                        ctx.fillStyle = '#fff';
+                    }
+
+                    ctx.font = `bold ${fontSize}px monospace`;
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'middle';
+
+                    const displayText = isNumeric ? value.toFixed(3) : String(value);
+                    const padding = 10;
+                    ctx.fillText(
+                        displayText,
+                        x + padding,
+                        i * cellHeight + cellHeight / 2
+                    );
+                });
+            });
+
+            target.innerHTML = '';
+            target.appendChild(canvas);
+
+            // Store canvas as data URL
+            const dataUrl = canvas.toDataURL('image/png');
+            if (target === beforeDiv) image1Data = dataUrl;
+            if (target === afterDiv) image2Data = dataUrl;
+            updateDownloadButton();
+        }
+
+        function updateDownloadButton() {
+            if (image1Data && image2Data) {
+                downloadBtn.style.display = 'inline-block';
+            }
+        }
+
+        function downloadComparison() {
+            // Extract just the filename without path
+            const name1 = image1Name.split('/').pop().split('\\').pop();
+            const name2 = image2Name.split('/').pop().split('\\').pop();
+
+            const minimalHTML = '<!DOCTYPE html>\n' +
+'<html lang="en">\n' +
+'<head>\n' +
+'    <meta charset="UTF-8">\n' +
+'    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+'    <title>CSV Comparison</title>\n' +
+'    <style>\n' +
+'        * { margin: 0; padding: 0; box-sizing: border-box; }\n' +
+'        body { background: #1a1a1a; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }\n' +
+'        .title { text-align: center; color: #888; font-size: 16px; margin-bottom: 15px; font-family: monospace; }\n' +
+'        .container { position: relative; width: 100%; max-width: 100%; min-height: 80vh; overflow: hidden; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); background: #000; user-select: none; -webkit-user-select: none; }\n' +
+'        .wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }\n' +
+'        .wrapper img, .wrapper canvas { width: 100%; height: 100%; object-fit: contain; display: block; }\n' +
+'        .before { z-index: 1; }\n' +
+'        .after { z-index: 2; clip-path: inset(0 0 0 50%); }\n' +
+'        .slider { position: absolute; top: 0; left: 50%; width: 4px; height: 100%; background: #fff; cursor: ew-resize; z-index: 3; transform: translateX(-50%); }\n' +
+'        .slider::before { content: ""; position: absolute; top: 50%; left: 50%; width: 40px; height: 40px; background: #fff; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 2px 10px rgba(0,0,0,0.3); }\n' +
+'        .slider::after { content: "⟷"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; color: #333; z-index: 1; }\n' +
+'    </style>\n' +
+'</head>\n' +
+'<body>\n' +
+'    <div class="title">' + name1 + ' vs ' + name2 + '</div>\n' +
+'    <div class="container" id="c">\n' +
+'        <div class="wrapper before"><img src="' + image1Data + '" alt="Before"></div>\n' +
+'        <div class="wrapper after" id="a"><img src="' + image2Data + '" alt="After"></div>\n' +
+'        <div class="slider" id="s"></div>\n' +
+'    </div>\n' +
+'    <script>\n' +
+'        const c = document.getElementById("c");\n' +
+'        const s = document.getElementById("s");\n' +
+'        const a = document.getElementById("a");\n' +
+'        let d = false;\n' +
+'        let p = 50;\n' +
+'        function u(pos) {\n' +
+'            p = Math.max(0, Math.min(100, pos));\n' +
+'            s.style.left = p + "%";\n' +
+'            a.style.clipPath = "inset(0 0 0 " + p + "%)";\n' +
+'        }\n' +
+'        s.addEventListener("mousedown", (e) => { d = true; e.preventDefault(); });\n' +
+'        document.addEventListener("mouseup", () => d = false);\n' +
+'        c.addEventListener("mousemove", (e) => {\n' +
+'            if (!d) return;\n' +
+'            e.preventDefault();\n' +
+'            const r = c.getBoundingClientRect();\n' +
+'            u(((e.clientX - r.left) / r.width) * 100);\n' +
+'        });\n' +
+'        c.addEventListener("click", (e) => {\n' +
+'            const r = c.getBoundingClientRect();\n' +
+'            u(((e.clientX - r.left) / r.width) * 100);\n' +
+'        });\n' +
+'        s.addEventListener("touchstart", (e) => { d = true; e.preventDefault(); });\n' +
+'        document.addEventListener("touchend", () => d = false);\n' +
+'        c.addEventListener("touchmove", (e) => {\n' +
+'            if (!d) return;\n' +
+'            const r = c.getBoundingClientRect();\n' +
+'            const t = e.touches[0];\n' +
+'            u(((t.clientX - r.left) / r.width) * 100);\n' +
+'            e.preventDefault();\n' +
+'        });\n' +
+'    <\/script>\n' +
+'</body>\n' +
+'</html>';
+
+            const blob = new Blob([minimalHTML], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'comparison.html';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        downloadBtn.addEventListener('click', downloadComparison);
+
+        image1Input.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0], beforeDiv);
+            }
+        });
+
+        image2Input.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0], afterDiv);
+            }
+        });
+    </script>
+</body>
+</html>
