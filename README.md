@@ -1,8 +1,10 @@
 # CSV Comparison Slider
 
-Side-by-side comparison tool for CSV files with interactive slider. Numbers in CSVs are rendered as color-coded heatmaps. Image uploads also supported becuase why not. 
+Side-by-side comparison tool for CSV files with interactive slider. Numbers in CSVs are rendered as color-coded heatmaps. You can download and share the comparisons. Image uploads also supported becuase why not. 
 
 Available at: https://jnyyssol.github.io/CSV-comparison-slider/
+
+Here is an example of the shareable html: https://jnyyssol.github.io/CSV-comparison-slider/comparison.html
 
 This is a quick unoptimized demo made with Claude in 20 minutes.
 
