@@ -81,6 +81,7 @@
             background: #000;
             user-select: none;
             -webkit-user-select: none;
+            transform-origin: top center;
         }
 
         .image-wrapper {
@@ -182,11 +183,6 @@
         <div class="slider" id="slider"></div>
     </div>
 
-    <div class="info">
-        Compare CSV files side-by-side with interactive heatmap visualization.
-        Upload two CSV files to see differences. Images also supported.
-        Drag the slider to compare. Download button appears when both files are loaded.
-    </div>
 
     <script>
         const container = document.getElementById('container');
@@ -203,6 +199,23 @@
         let image2Data = null;
         let image1Name = '';
         let image2Name = '';
+        let scale = 1;
+
+        // Zoom functionality - scale the entire container
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            scale = Math.max(0.1, Math.min(10, scale * delta));
+            container.style.transform = `scale(${scale})`;
+        });
+
+        // Double-click to reset zoom
+        container.addEventListener('dblclick', (e) => {
+            if (e.target !== slider && !e.target.closest('.slider')) {
+                scale = 1;
+                container.style.transform = `scale(${scale})`;
+            }
+        });
 
         // Slider functionality
         function updateSlider(position) {
@@ -218,11 +231,12 @@
         document.addEventListener('mouseup', () => isDragging = false);
 
         container.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            e.preventDefault();
-            const rect = container.getBoundingClientRect();
-            const position = ((e.clientX - rect.left) / rect.width) * 100;
-            updateSlider(position);
+            if (isDragging) {
+                e.preventDefault();
+                const rect = container.getBoundingClientRect();
+                const position = ((e.clientX - rect.left) / rect.width) * 100;
+                updateSlider(position);
+            }
         });
 
         container.addEventListener('click', (e) => {
@@ -415,7 +429,7 @@
 '        * { margin: 0; padding: 0; box-sizing: border-box; }\n' +
 '        body { background: #1a1a1a; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }\n' +
 '        .title { text-align: center; color: #888; font-size: 16px; margin-bottom: 15px; font-family: monospace; }\n' +
-'        .container { position: relative; width: 100%; max-width: 100%; min-height: 80vh; overflow: hidden; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); background: #000; user-select: none; -webkit-user-select: none; }\n' +
+'        .container { position: relative; width: 100%; max-width: 100%; min-height: 80vh; overflow: hidden; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); background: #000; user-select: none; -webkit-user-select: none; transform-origin: top center; }\n' +
 '        .wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }\n' +
 '        .wrapper img, .wrapper canvas { width: 100%; height: 100%; object-fit: contain; display: block; }\n' +
 '        .before { z-index: 1; }\n' +
@@ -438,11 +452,24 @@
 '        const a = document.getElementById("a");\n' +
 '        let d = false;\n' +
 '        let p = 50;\n' +
+'        let scale = 1;\n' +
 '        function u(pos) {\n' +
 '            p = Math.max(0, Math.min(100, pos));\n' +
 '            s.style.left = p + "%";\n' +
 '            a.style.clipPath = "inset(0 0 0 " + p + "%)";\n' +
 '        }\n' +
+'        c.addEventListener("wheel", (e) => {\n' +
+'            e.preventDefault();\n' +
+'            const delta = e.deltaY > 0 ? 0.9 : 1.1;\n' +
+'            scale = Math.max(0.1, Math.min(10, scale * delta));\n' +
+'            c.style.transform = "scale(" + scale + ")";\n' +
+'        });\n' +
+'        c.addEventListener("dblclick", (e) => {\n' +
+'            if (e.target !== s && !e.target.closest(".slider")) {\n' +
+'                scale = 1;\n' +
+'                c.style.transform = "scale(" + scale + ")";\n' +
+'            }\n' +
+'        });\n' +
 '        s.addEventListener("mousedown", (e) => { d = true; e.preventDefault(); });\n' +
 '        document.addEventListener("mouseup", () => d = false);\n' +
 '        c.addEventListener("mousemove", (e) => {\n' +
